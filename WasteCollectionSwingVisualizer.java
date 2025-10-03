@@ -1,4 +1,5 @@
-package project2;
+package project;
+
 
 import javax.swing.*;
 import java.awt.*;
@@ -12,7 +13,11 @@ import java.util.PriorityQueue;
 import java.util.Comparator;
 import java.util.Collections;
 
-public class WasteCollectionSwingVisualizer{
+
+public class Prefix {
+	private static List<String> communityPrograms = new ArrayList<>();
+    private static List<String> policyUpdates = new ArrayList<>();
+
 
     private static class Graph {
         private final Map<String, List<Route>> adjacencyList = new HashMap<>();
@@ -89,16 +94,56 @@ public class WasteCollectionSwingVisualizer{
             current.recyclingTip = tip;
         }
 
-        public String getRecyclingTip(String item) {
+        // New method for suggestions
+        public List<String> getTipsByPrefix(String prefix) {
             TrieNode current = root;
-            for (char c : item.toLowerCase().toCharArray()) {
+            for (char c : prefix.toLowerCase().toCharArray()) {
                 if (!current.children.containsKey(c)) {
-                    return "No recycling tips available for this item.";
+                    return Collections.emptyList(); // no suggestions
                 }
                 current = current.children.get(c);
             }
-            return current.recyclingTip != null ? current.recyclingTip : "No specific tip available for this item.";
+            List<String> suggestions = new ArrayList<>();
+            collectTips(current, suggestions);
+            return suggestions;
         }
+
+        private void collectTips(TrieNode node, List<String> tips) {
+            if (node.recyclingTip != null) tips.add(node.recyclingTip);
+            for (TrieNode child : node.children.values()) {
+                collectTips(child, tips);
+            }
+        }
+     // In RecyclingTrie class
+        public List<String> getMaterialsByPrefix(String prefix) {
+            TrieNode current = root;
+            for (char c : prefix.toLowerCase().toCharArray()) {
+                if (!current.children.containsKey(c)) return Collections.emptyList();
+                current = current.children.get(c);
+            }
+            List<String> results = new ArrayList<>();
+            collectMaterials(current, new StringBuilder(prefix.toLowerCase()), results);
+            return results;
+        }
+
+        private void collectMaterials(TrieNode node, StringBuilder prefix, List<String> materials) {
+            if (node.recyclingTip != null) materials.add(prefix.toString());
+            for (var entry : node.children.entrySet()) {
+                prefix.append(entry.getKey());
+                collectMaterials(entry.getValue(), prefix, materials);
+                prefix.deleteCharAt(prefix.length() - 1);
+            }
+        }
+        public String getRecyclingTip(String material) {
+            TrieNode current = root;
+            for (char c : material.toLowerCase().toCharArray()) {
+                if (!current.children.containsKey(c)) return "No tip available.";
+                current = current.children.get(c);
+            }
+            return current.recyclingTip != null ? current.recyclingTip : "No tip available.";
+        }
+
+
     }
 
     private static final Graph areaGraph = new Graph();
@@ -106,25 +151,19 @@ public class WasteCollectionSwingVisualizer{
     private static final Map<String, Integer> wasteProductionData = new HashMap<>();
     private static final Map<String, String> wasteCategories = new HashMap<>();
     private static final List<String> citizenFeedback = new ArrayList<>();
-    private static final List<String> communityPrograms = new ArrayList<>();
-    private static final List<String> policyUpdates = new ArrayList<>();
-
 
     public static void main(String[] args) {
         initializeData();
-        initializeWasteCategories();
-        SwingUtilities.invokeLater(WasteCollectionSwingVisualizer::showMainMenu);
+        setGlobalUI(); // <-- add this
+        SwingUtilities.invokeLater(Prefix::showMainMenu);
     }
-    
-    
-   
+
     private static void initializeData() {
         initializeGraph();
         initializeRecyclingTips();
+        initializeWasteProductionData();
         initializeWasteCategories();
-        initializeCommunityAndPolicyData(); // Initialize new data
     }
-
 
     private static void initializeGraph() {
         areaGraph.addArea("A");
@@ -196,7 +235,13 @@ public class WasteCollectionSwingVisualizer{
         recyclingTrie.addRecyclingTip("aluminum_foil", "Rinse and recycle in aluminum recycling bins.");
     }
 
-    
+    private static void initializeWasteProductionData() {
+        wasteProductionData.put("A", 500);
+        wasteProductionData.put("B", 750);
+        wasteProductionData.put("C", 600);
+        wasteProductionData.put("D", 900);
+    }
+
     private static void initializeWasteCategories() {
         wasteCategories.put("plastic", "Recyclable");
         wasteCategories.put("glass", "Recyclable");
@@ -255,111 +300,315 @@ public class WasteCollectionSwingVisualizer{
         wasteCategories.put("furniture", "Non-Recyclable");
         wasteCategories.put("garden_tools", "Non-Recyclable");
     }
-    
+
     
     private static void showMainMenu() {
         JFrame frame = new JFrame("Smart Waste Management System");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(400, 300);
-        frame.setLayout(new GridLayout(5, 1));
+        frame.setSize(450, 400);
+        frame.setLocationRelativeTo(null); // center on screen
 
-        JButton citizenButton = new JButton("Citizen");
-        JButton collectorButton = new JButton("Collector");
-        JButton staffButton = new JButton("Waste Management Staff");
-        JButton routesButton = new JButton("Display All Routes");
-        JButton exitButton = new JButton("Exit");
+        // Panel with vertical layout and padding
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250)); // light lavender
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 50, 20, 50));
 
+        // Title
+        JLabel title = new JLabel("Smart Waste Management System");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        title.setForeground(new Color(25, 25, 112)); // dark blue
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        title.setBorder(BorderFactory.createEmptyBorder(10, 0, 20, 0));
+
+        // Buttons with uniform style
+        JButton citizenButton = createStyledButton("Citizen");
+        JButton collectorButton = createStyledButton("Collector");
+        JButton staffButton = createStyledButton("Waste Management Staff");
+        JButton routesButton = createStyledButton("Display All Routes");
+        JButton exitButton = createStyledButton("Exit");
+
+        // Button actions
         citizenButton.addActionListener(e -> showCitizenDashboard());
         collectorButton.addActionListener(e -> showCollectorDashboard());
         staffButton.addActionListener(e -> showWasteManagementDashboard());
         routesButton.addActionListener(e -> displayAllRoutes());
         exitButton.addActionListener(e -> frame.dispose());
 
-        frame.add(citizenButton);
-        frame.add(collectorButton);
-        frame.add(staffButton);
-        frame.add(routesButton);
-        frame.add(exitButton);
+        // Add components to panel with spacing
+        panel.add(title);
+        panel.add(citizenButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(collectorButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(staffButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(routesButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(exitButton);
 
+        frame.add(panel);
         frame.setVisible(true);
     }
+
+    // Helper method for styled buttons
+    private static JButton createStyledButton(String text) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        button.setBackground(new Color(0, 0, 0)); // steel blue
+        button.setForeground(Color.BLACK);
+        button.setFocusPainted(false);
+        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        // Hover effect
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(new Color(100, 149, 237)); // lighter blue
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(new Color(70, 130, 180));
+            }
+        });
+        return button;
+    }
+
 
     private static void showCitizenDashboard() {
         JFrame frame = new JFrame("Citizen Dashboard");
-        frame.setSize(400, 300);
-        frame.setLayout(new GridLayout(3, 1));
+        frame.setSize(450, 350);
+        frame.setLocationRelativeTo(null); // center on screen
 
-        JButton feedbackButton = new JButton("Submit Feedback");
-        JButton recyclingTipButton = new JButton("Get Recycling Tips");
-        JButton communityProgramsButton = new JButton("View Community Programs"); // New button
-        JButton policyUpdatesButton = new JButton("View Policy Updates");
-        JButton wasteCategoriesButton = new JButton("View Waste Categories"); 
-        JButton backButton = new JButton("Back to Main Menu");
+        // Main panel with vertical layout and padding
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250)); // light lavender
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 50, 20, 50));
 
+        // Title
+        JLabel title = new JLabel("Citizen Dashboard");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        title.setForeground(new Color(25, 25, 112)); // dark blue
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        title.setBorder(BorderFactory.createEmptyBorder(10, 0, 20, 0));
+
+        // Buttons
+        JButton feedbackButton = createStyledButton("Submit Feedback");
+        JButton recyclingTipButton = createStyledButton("Get Recycling Tips");
+        JButton backButton = createStyledButton("Back to Main Menu");
+
+        // Button actions
         feedbackButton.addActionListener(e -> submitFeedback());
-        recyclingTipButton.addActionListener(e -> getRecyclingTips());
-        communityProgramsButton.addActionListener(e -> viewCommunityPrograms()); // Action for community programs
-        policyUpdatesButton.addActionListener(e -> viewPolicyUpdates());
-        wasteCategoriesButton.addActionListener(e -> viewWasteCategories());
+//        recyclingTipButton.addActionListener(e -> getRecyclingTips());
+        recyclingTipButton.addActionListener(e -> showRecyclingTipUI());
+
         backButton.addActionListener(e -> frame.dispose());
 
-        frame.add(feedbackButton);
-        frame.add(recyclingTipButton);
-        frame.add(communityProgramsButton); // Add new button
-        frame.add(policyUpdatesButton);
-        frame.add(wasteCategoriesButton);
-        frame.add(backButton);
+        // Add components with spacing
+        panel.add(title);
+        panel.add(feedbackButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(recyclingTipButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(backButton);
 
+        frame.add(panel);
         frame.setVisible(true);
     }
     
-    private static void viewWasteCategories() {
-        String product = JOptionPane.showInputDialog("Enter a product name to check its waste category:");
-
-        if (product != null && !product.isEmpty()) {
-            // Check if the product exists in the waste categories map
-            String category = wasteCategories.get(product.toLowerCase());
-            
-            if (category != null) {
-                JOptionPane.showMessageDialog(null, "The product '" + product + "' is categorized as: " + category);
-            } else {
-                JOptionPane.showMessageDialog(null, "Sorry, no category found for the product '" + product + "'.");
-            }
-        } else {
-            JOptionPane.showMessageDialog(null, "Please enter a valid product name.");
-        }
-    }
-
+    
     private static void submitFeedback() {
-        String feedback = JOptionPane.showInputDialog("Enter your feedback:");
-        if (feedback != null && !feedback.isEmpty()) {
-            citizenFeedback.add(feedback);
-            JOptionPane.showMessageDialog(null, "Thank you for your feedback!");
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250));
+        panel.setLayout(new BorderLayout(5, 5));
+
+        JLabel label = new JLabel("Enter your feedback:");
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        label.setForeground(new Color(25, 25, 112));
+
+        JTextField textField = new JTextField(20);
+
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(textField, BorderLayout.CENTER);
+
+        int result = JOptionPane.showConfirmDialog(null, panel, "Submit Feedback",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION && !textField.getText().trim().isEmpty()) {
+            citizenFeedback.add(textField.getText().trim());
+            JOptionPane.showMessageDialog(null, "Thank you for your feedback!", 
+                    "Feedback Received", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
     private static void getRecyclingTips() {
-        String item = JOptionPane.showInputDialog("Enter item name for recycling tips:");
-        if (item != null && !item.isEmpty()) {
-            String tip = recyclingTrie.getRecyclingTip(item);
-            JOptionPane.showMessageDialog(null, tip);
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250));
+        panel.setLayout(new BorderLayout(5, 5));
+
+        JLabel label = new JLabel("Enter item name for recycling tips:");
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        label.setForeground(new Color(25, 25, 112));
+
+        JTextField textField = new JTextField(20);
+
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(textField, BorderLayout.CENTER);
+
+        int result = JOptionPane.showConfirmDialog(null, panel, "Recycling Tips",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION && !textField.getText().trim().isEmpty()) {
+            String input = textField.getText().trim();
+            
+            // Get all tips that match the prefix
+            List<String> tips = recyclingTrie.getTipsByPrefix(input);
+
+            if (tips.isEmpty()) {
+                JOptionPane.showMessageDialog(null, 
+                    "No recycling tips found for \"" + input + "\".", 
+                    "Recycling Tip", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                // Join all suggestions into one message
+                String message = String.join("\n", tips);
+                JOptionPane.showMessageDialog(null, message, "Recycling Tips", JOptionPane.INFORMATION_MESSAGE);
+            }
         }
     }
-
     
-    
- // Method to initialize programs and policy updates
-    private static void initializeCommunityAndPolicyData() {
-        // Example community programs
-        communityPrograms.add("Plastic Waste Reduction Campaign - Organizing community cleanups every weekend.");
-        communityPrograms.add("Composting Program - Encouraging households to compost organic waste.");
+    private static void showRecyclingTipUI() {
+        JFrame frame = new JFrame("Recycling Tips");
+        frame.setSize(400, 300);
+        frame.setLocationRelativeTo(null);
+        frame.setLayout(new BorderLayout(5, 5));
 
-        // Example policy updates
-        policyUpdates.add("New Policy on Electronic Waste - All e-waste should be dropped off at designated collection points.");
-        policyUpdates.add("Ban on Single-Use Plastics - Effective from next month, single-use plastics will be banned in public spaces.");
+        JTextField textField = new JTextField();
+        DefaultListModel<String> listModel = new DefaultListModel<>();
+        JList<String> suggestionList = new JList<>(listModel);
+        JScrollPane scrollPane = new JScrollPane(suggestionList);
+
+        // Listen to typing
+        textField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { updateList(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { updateList(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { updateList(); }
+
+            private void updateList() {
+                String input = textField.getText().trim();
+                listModel.clear();
+                if (!input.isEmpty()) {
+                    // Get matching materials (keys) from Trie
+                    List<String> suggestions = recyclingTrie.getMaterialsByPrefix(input);
+                    for (String material : suggestions) {
+                        listModel.addElement(material);
+                    }
+                }
+            }
+        });
+
+        // Show tip when user selects a material
+        suggestionList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                String selectedMaterial = suggestionList.getSelectedValue();
+                if (selectedMaterial != null) {
+                    String tip = recyclingTrie.getRecyclingTip(selectedMaterial);
+                    JOptionPane.showMessageDialog(frame, tip, "Recycling Tip", JOptionPane.INFORMATION_MESSAGE);
+                }
+            }
+        });
+
+        frame.add(textField, BorderLayout.NORTH);
+        frame.add(scrollPane, BorderLayout.CENTER);
+
+        frame.setVisible(true);
     }
 
-    // Method to view community programs
+
+
+
+    private static void showCollectorDashboard() {
+    	
+        JFrame frame = new JFrame("Collector Dashboard");
+        frame.setSize(650, 600);
+        frame.setLocationRelativeTo(null); // center on screen
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+        JPanel mainPanel = new JPanel();
+        mainPanel.setBackground(new Color(230, 230, 250)); // light lavender
+        mainPanel.setLayout(new BorderLayout(10, 10));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        // --- Top panel: Inputs ---
+        JPanel inputPanel = new JPanel();
+        inputPanel.setLayout(new GridLayout(3, 2, 10, 10));
+        inputPanel.setBackground(new Color(230, 230, 250));
+
+        JLabel startLabel = new JLabel("Start Area:");
+        startLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        startLabel.setForeground(new Color(25, 25, 112));
+        JTextField startField = new JTextField();
+
+        JLabel destinationLabel = new JLabel("Destination Area:");
+        destinationLabel.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        destinationLabel.setForeground(new Color(25, 25, 112));
+        JTextField destinationField = new JTextField();
+
+        JButton findRouteButton = createStyledButton("Find Optimized Route");
+
+        inputPanel.add(startLabel);
+        inputPanel.add(startField);
+        inputPanel.add(destinationLabel);
+        inputPanel.add(destinationField);
+        inputPanel.add(new JLabel()); // empty cell
+        inputPanel.add(findRouteButton);
+
+        // --- Center panel: Graph ---
+        GraphPanel graphPanel = new GraphPanel();
+        graphPanel.setBackground(new Color(245, 245, 255)); // slightly lighter for contrast
+
+        // --- Bottom panel: dashboard buttons ---
+        JPanel dashboardPanel = new JPanel();
+        dashboardPanel.setLayout(new GridLayout(1, 3, 10, 0));
+        dashboardPanel.setBackground(new Color(230, 230, 250));
+
+        JButton communityProgramsButton = createStyledButton("Community Programs");
+        JButton policyUpdatesButton = createStyledButton("Policy Updates");
+        JButton backButton = createStyledButton("Back to Main Menu");
+
+        dashboardPanel.add(communityProgramsButton);
+        dashboardPanel.add(policyUpdatesButton);
+        dashboardPanel.add(backButton);
+
+        // --- Button Actions ---
+        findRouteButton.addActionListener(e -> {
+            String start = startField.getText().trim();
+            String destination = destinationField.getText().trim();
+            if (start.isEmpty() || destination.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "Please enter both start and destination areas.");
+                return;
+            }
+            List<String> route = areaGraph.getOptimizedRoute(start, destination);
+            if (route.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "No route found between " + start + " and " + destination);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Optimized route: " + String.join(" -> ", route));
+                graphPanel.setHighlightedRoute(route);
+            }
+        });
+
+        communityProgramsButton.addActionListener(e -> viewCommunityPrograms());
+        policyUpdatesButton.addActionListener(e -> viewPolicyUpdates());
+        backButton.addActionListener(e -> frame.dispose());
+
+        // --- Add panels to main panel ---
+        mainPanel.add(inputPanel, BorderLayout.NORTH);
+        mainPanel.add(graphPanel, BorderLayout.CENTER);
+        mainPanel.add(dashboardPanel, BorderLayout.SOUTH);
+
+        frame.add(mainPanel);
+        frame.setVisible(true);
+    }
+    
+ // View community programs
     private static void viewCommunityPrograms() {
         if (communityPrograms.isEmpty()) {
             JOptionPane.showMessageDialog(null, "No active community programs.");
@@ -369,7 +618,7 @@ public class WasteCollectionSwingVisualizer{
         }
     }
 
-    // Method to view policy updates
+    // View policy updates
     private static void viewPolicyUpdates() {
         if (policyUpdates.isEmpty()) {
             JOptionPane.showMessageDialog(null, "No policy updates available.");
@@ -379,100 +628,242 @@ public class WasteCollectionSwingVisualizer{
         }
     }
 
-    // Method to add a new community program
+    // Add a new community program (for Staff dashboard)
     private static void addCommunityProgram() {
-        String program = JOptionPane.showInputDialog("Enter new community waste reduction program:");
-        if (program != null && !program.isEmpty()) {
-            communityPrograms.add(program);
-            JOptionPane.showMessageDialog(null, "New community program added successfully!");
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250));
+        panel.setLayout(new BorderLayout(5, 5));
+
+        JLabel label = new JLabel("Enter new community waste reduction program:");
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        label.setForeground(new Color(25, 25, 112));
+        JTextField textField = new JTextField(20);
+
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(textField, BorderLayout.CENTER);
+
+        int result = JOptionPane.showConfirmDialog(null, panel, "Add Community Program",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION && !textField.getText().trim().isEmpty()) {
+            communityPrograms.add(textField.getText().trim());
+            JOptionPane.showMessageDialog(null, "New community program added successfully!", 
+                "Success", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
-    // Method to add a new policy update
+    // Add a new policy update (for Staff dashboard)
     private static void addPolicyUpdate() {
-        String update = JOptionPane.showInputDialog("Enter new waste disposal policy update:");
-        if (update != null && !update.isEmpty()) {
-            policyUpdates.add(update);
-            JOptionPane.showMessageDialog(null, "New policy update added successfully!");
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250));
+        panel.setLayout(new BorderLayout(5, 5));
+
+        JLabel label = new JLabel("Enter new waste disposal policy update:");
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        label.setForeground(new Color(25, 25, 112));
+        JTextField textField = new JTextField(20);
+
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(textField, BorderLayout.CENTER);
+
+        int result = JOptionPane.showConfirmDialog(null, panel, "Add Policy Update",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION && !textField.getText().trim().isEmpty()) {
+            policyUpdates.add(textField.getText().trim());
+            JOptionPane.showMessageDialog(null, "New policy update added successfully!", 
+                "Success", JOptionPane.INFORMATION_MESSAGE);
         }
-    }
-
- 
-
-    private static void showWasteManagementDashboard() {
-        JFrame frame = new JFrame("Waste Management Dashboard");
-        frame.setSize(400, 300);
-        frame.setLayout(new GridLayout(3, 1));
-
-        
-        JButton viewFeedbackButton = new JButton("View Citizen Feedback");
-        JButton addRouteButton = new JButton("Add New Route");
-        JButton backButton = new JButton("Back to Main Menu");
-        JButton communityProgramButton = new JButton("Community Waste Reduction Program");
-        JButton policyUpdatesButton = new JButton("Waste Disposal Policy Updates");
-
-        
-        viewFeedbackButton.addActionListener(e -> viewCitizenFeedback());
-        addRouteButton.addActionListener(e -> addNewRoute());
-        backButton.addActionListener(e -> frame.dispose());
-        communityProgramButton.addActionListener(e -> showCommunityProgramDashboard());
-        policyUpdatesButton.addActionListener(e -> showPolicyUpdateDashboard());
-        
-        frame.add(viewFeedbackButton);
-        frame.add(addRouteButton);
-        frame.add(communityProgramButton);
-        frame.add(policyUpdatesButton);
-        frame.add(backButton);
-        
-
-        frame.setVisible(true);
     }
     
     private static void showCommunityProgramDashboard() {
         JFrame frame = new JFrame("Community Waste Reduction Program");
-        frame.setSize(400, 300);
-        frame.setLayout(new GridLayout(3, 1));
+        frame.setSize(450, 350);
+        frame.setLocationRelativeTo(null);
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250));
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 50, 20, 50));
 
-        JButton viewProgramsButton = new JButton("View Community Programs");
-        JButton addProgramButton = new JButton("Add New Program");
-        JButton backButton = new JButton("Back to Main Menu");
+        JLabel title = new JLabel("Community Programs");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        title.setForeground(new Color(25, 25, 112));
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        title.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
+
+        JButton viewProgramsButton = createStyledButton("View Community Programs");
+        JButton addProgramButton = createStyledButton("Add New Program");
+        JButton backButton = createStyledButton("Back to Main Menu");
 
         viewProgramsButton.addActionListener(e -> viewCommunityPrograms());
         addProgramButton.addActionListener(e -> addCommunityProgram());
         backButton.addActionListener(e -> frame.dispose());
 
-        frame.add(viewProgramsButton);
-        frame.add(addProgramButton);
-        frame.add(backButton);
+        panel.add(title);
+        panel.add(viewProgramsButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(addProgramButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(backButton);
 
+        frame.add(panel);
         frame.setVisible(true);
     }
 
     private static void showPolicyUpdateDashboard() {
         JFrame frame = new JFrame("Waste Disposal Policy Updates");
-        frame.setSize(400, 300);
-        frame.setLayout(new GridLayout(3, 1));
+        frame.setSize(450, 350);
+        frame.setLocationRelativeTo(null);
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250));
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 50, 20, 50));
 
-        JButton viewPoliciesButton = new JButton("View Policy Updates");
-        JButton addPolicyButton = new JButton("Add New Policy Update");
-        JButton backButton = new JButton("Back to Main Menu");
+        JLabel title = new JLabel("Policy Updates");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        title.setForeground(new Color(25, 25, 112));
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        title.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
+
+        JButton viewPoliciesButton = createStyledButton("View Policy Updates");
+        JButton addPolicyButton = createStyledButton("Add New Policy Update");
+        JButton backButton = createStyledButton("Back to Main Menu");
 
         viewPoliciesButton.addActionListener(e -> viewPolicyUpdates());
         addPolicyButton.addActionListener(e -> addPolicyUpdate());
         backButton.addActionListener(e -> frame.dispose());
 
-        frame.add(viewPoliciesButton);
-        frame.add(addPolicyButton);
-        frame.add(backButton);
+        panel.add(title);
+        panel.add(viewPoliciesButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(addPolicyButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(backButton);
 
+        frame.add(panel);
+        frame.setVisible(true);
+    }
+    
+    private static void viewWasteCategories() {
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250));
+        panel.setLayout(new BorderLayout(5, 5));
+
+        JLabel label = new JLabel("Enter product name to check its waste category:");
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        label.setForeground(new Color(25, 25, 112));
+        JTextField textField = new JTextField(20);
+
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(textField, BorderLayout.CENTER);
+
+        int result = JOptionPane.showConfirmDialog(null, panel, "Waste Categories",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION && !textField.getText().trim().isEmpty()) {
+            String category = wasteCategories.get(textField.getText().trim().toLowerCase());
+            if (category != null) {
+                JOptionPane.showMessageDialog(null, 
+                    "The product '" + textField.getText().trim() + "' is categorized as: " + category,
+                    "Waste Category", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(null, 
+                    "Sorry, no category found for the product '" + textField.getText().trim() + "'.",
+                    "Waste Category", JOptionPane.INFORMATION_MESSAGE);
+            }
+        }
+    }
+    
+    private static void showWasteManagementDashboard() {
+        JFrame frame = new JFrame("Waste Management Dashboard");
+        frame.setSize(500, 400);
+        frame.setLocationRelativeTo(null); // center on screen
+
+        JPanel panel = new JPanel();
+        panel.setBackground(new Color(230, 230, 250)); // light lavender
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 50, 20, 50));
+
+        // Title
+        JLabel title = new JLabel("Waste Management Dashboard");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        title.setForeground(new Color(25, 25, 112)); // dark blue
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        title.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
+
+        // Buttons
+        JButton viewDataButton = createStyledButton("View Waste Production Data");
+        JButton viewFeedbackButton = createStyledButton("View Citizen Feedback");
+        JButton addRouteButton = createStyledButton("Add New Route");
+        JButton communityProgramButton = createStyledButton("Community Waste Reduction Program");
+        JButton policyUpdatesButton = createStyledButton("Waste Disposal Policy Updates");
+        JButton backButton = createStyledButton("Back to Main Menu");
+
+        // Button actions
+        viewDataButton.addActionListener(e -> viewWasteProductionData());
+        viewFeedbackButton.addActionListener(e -> viewCitizenFeedback());
+        addRouteButton.addActionListener(e -> addNewRoute());
+        communityProgramButton.addActionListener(e -> showCommunityProgramDashboard());
+        policyUpdatesButton.addActionListener(e -> showPolicyUpdateDashboard());
+        backButton.addActionListener(e -> frame.dispose());
+
+        // Add buttons with spacing
+        panel.add(title);
+        panel.add(viewDataButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(viewFeedbackButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(addRouteButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(communityProgramButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(policyUpdatesButton);
+        panel.add(Box.createRigidArea(new Dimension(0, 10)));
+        panel.add(backButton);
+
+        frame.add(panel);
+        frame.setVisible(true);
+    }
+
+    private static void viewWasteProductionData() {
+        StringBuilder data = new StringBuilder("Waste Production Data:\n");
+        for (var entry : wasteProductionData.entrySet()) {
+            data.append(entry.getKey()).append(": ").append(entry.getValue()).append(" kg\n");
+        }
+        JOptionPane.showMessageDialog(null, data.toString());
+    }
+
+    private static void viewCitizenFeedback() {
+        String feedback = citizenFeedback.isEmpty() ? "No feedback submitted." : String.join("\n", citizenFeedback);
+        JOptionPane.showMessageDialog(null, "Citizen Feedback:\n" + feedback);
+    }
+
+    private static void addNewRoute() {
+        String startArea = JOptionPane.showInputDialog("Enter starting area:");
+        String destinationArea = JOptionPane.showInputDialog("Enter destination area:");
+        int distance = Integer.parseInt(JOptionPane.showInputDialog("Enter distance (in km):"));
+
+        areaGraph.addArea(startArea);
+        areaGraph.addArea(destinationArea);
+        areaGraph.addRoute(startArea, destinationArea, distance);
+        JOptionPane.showMessageDialog(null, "New route added successfully!");
+    }
+
+    private static void displayAllRoutes() {
+        JFrame frame = new JFrame("All Routes");
+        frame.setSize(600, 600);
+        frame.setLocationRelativeTo(null); // center on screen
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        
+        GraphPanel panel = new GraphPanel();
+        panel.setBackground(new Color(245, 245, 245)); // light background
+        frame.add(panel);
+        
         frame.setVisible(true);
     }
 
     private static class GraphPanel extends JPanel {
-        private final int nodeRadius = 30;
-        private final int panelPadding = 50;
-
-        // Store calculated node positions to reuse across different paints
+        private final int nodeRadius = 40;
         private final Map<String, Point> nodePositions = new HashMap<>();
         private List<String> highlightedRoute = new ArrayList<>(); // Store the optimized route
 
@@ -489,7 +880,8 @@ public class WasteCollectionSwingVisualizer{
 
             calculateNodePositions();
 
-            // Draw edges
+            // Draw edges first
+            g2d.setStroke(new BasicStroke(2));
             for (var entry : areaGraph.adjacencyList.entrySet()) {
                 String from = entry.getKey();
                 Point fromPoint = nodePositions.get(from);
@@ -497,20 +889,25 @@ public class WasteCollectionSwingVisualizer{
                 for (Route route : entry.getValue()) {
                     String to = route.area;
                     Point toPoint = nodePositions.get(to);
-
-                    if (toPoint != null && fromPoint != null) {
+                    if (fromPoint != null && toPoint != null) {
                         boolean isHighlighted = isRouteHighlighted(from, to);
-                        drawEdge(g2d, from, to, route.distance, fromPoint, toPoint, isHighlighted);
+                        g2d.setColor(isHighlighted ? Color.RED : new Color(100, 100, 100));
+                        g2d.drawLine(fromPoint.x, fromPoint.y, toPoint.x, toPoint.y);
+
+                        // Draw distance label
+                        int midX = (fromPoint.x + toPoint.x) / 2;
+                        int midY = (fromPoint.y + toPoint.y) / 2;
+                        g2d.setColor(isHighlighted ? Color.RED.darker() : Color.DARK_GRAY);
+                        g2d.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+                        g2d.drawString(route.distance + " km", midX, midY - 5);
                     }
                 }
             }
 
-            // Draw nodes
+            // Draw nodes on top
             for (var entry : nodePositions.entrySet()) {
-                String label = entry.getKey();
-                Point position = entry.getValue();
-                boolean isHighlighted = highlightedRoute.contains(label);
-                drawNode(g2d, label, position, isHighlighted);
+                boolean isHighlighted = highlightedRoute.contains(entry.getKey());
+                drawNode(g2d, entry.getKey(), entry.getValue(), isHighlighted);
             }
         }
 
@@ -532,20 +929,15 @@ public class WasteCollectionSwingVisualizer{
         }
 
         private void drawNode(Graphics2D g2d, String label, Point position, boolean isHighlighted) {
-            g2d.setColor(isHighlighted ? Color.RED : Color.BLUE);
+            g2d.setColor(isHighlighted ? Color.RED : new Color(70, 130, 180)); // steel blue
             g2d.fillOval(position.x - nodeRadius / 2, position.y - nodeRadius / 2, nodeRadius, nodeRadius);
+
             g2d.setColor(Color.WHITE);
-            g2d.drawString(label, position.x - 5, position.y + 5);
-        }
-
-        private void drawEdge(Graphics2D g2d, String from, String to, int distance, Point fromPoint, Point toPoint, boolean isHighlighted) {
-            g2d.setColor(isHighlighted ? Color.RED : Color.BLACK);
-            g2d.drawLine(fromPoint.x, fromPoint.y, toPoint.x, toPoint.y);
-
-            int midX = (fromPoint.x + toPoint.x) / 2;
-            int midY = (fromPoint.y + toPoint.y) / 2;
-            g2d.setColor(Color.BLACK);
-            g2d.drawString(distance + " km", midX, midY);
+            g2d.setFont(new Font("Segoe UI", Font.BOLD, 14));
+            FontMetrics fm = g2d.getFontMetrics();
+            int stringWidth = fm.stringWidth(label);
+            int stringHeight = fm.getAscent();
+            g2d.drawString(label, position.x - stringWidth / 2, position.y + stringHeight / 4);
         }
 
         private boolean isRouteHighlighted(String from, String to) {
@@ -559,85 +951,15 @@ public class WasteCollectionSwingVisualizer{
         }
     }
 
-
     
-    private static void viewCitizenFeedback() {
-        String feedback = citizenFeedback.isEmpty() ? "No feedback submitted." : String.join("\n", citizenFeedback);
-        JOptionPane.showMessageDialog(null, "Citizen Feedback:\n" + feedback);
+    private static void setGlobalUI() {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            UIManager.put("OptionPane.background", new Color(245, 245, 245));
+            UIManager.put("Panel.background", new Color(245, 245, 245));
+            UIManager.put("Button.font", new Font("Segoe UI", Font.BOLD, 14));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
-
-    private static void addNewRoute() {
-        String startArea = JOptionPane.showInputDialog("Enter starting area:");
-        String destinationArea = JOptionPane.showInputDialog("Enter destination area:");
-        int distance = Integer.parseInt(JOptionPane.showInputDialog("Enter distance (in km):"));
-
-        areaGraph.addArea(startArea);
-        areaGraph.addArea(destinationArea);
-        areaGraph.addRoute(startArea, destinationArea, distance);
-        JOptionPane.showMessageDialog(null, "New route added successfully!");
-    }
-    
-    
-
-    private static void showCollectorDashboard() {
-        JFrame frame = new JFrame("Collector Dashboard");
-        frame.setSize(600, 600);
-        frame.setLayout(new BorderLayout());
-
-        JPanel inputPanel = new JPanel(new GridLayout(3, 2));
-        JTextField startField = new JTextField();
-        JTextField destinationField = new JTextField();
-        JButton findRouteButton = new JButton("Find Optimized Route");
-        
-        inputPanel.add(new JLabel("Start Area:"));
-        inputPanel.add(startField);
-        inputPanel.add(new JLabel("Destination Area:"));
-        inputPanel.add(destinationField);
-        inputPanel.add(findRouteButton);
-
-        GraphPanel graphPanel = new GraphPanel();
-
-        findRouteButton.addActionListener(e -> {
-            String start = startField.getText().trim();
-            String destination = destinationField.getText().trim();
-            List<String> route = areaGraph.getOptimizedRoute(start, destination);
-            if (route.isEmpty()) {
-                JOptionPane.showMessageDialog(frame, "No route found between " + start + " and " + destination);
-            } else {
-                JOptionPane.showMessageDialog(frame, "Optimized route: " + String.join(" -> ", route));
-                graphPanel.setHighlightedRoute(route);
-            }
-        });
-
-        JPanel dashboardPanel = new JPanel(new GridLayout(3, 1));
-        JButton communityProgramsButton = new JButton("View Community Programs"); // New button
-        JButton policyUpdatesButton = new JButton("View Policy Updates"); // New button
-        JButton backButton = new JButton("Back to Main Menu");
-
-
-        communityProgramsButton.addActionListener(e -> viewCommunityPrograms()); // Action for community programs
-        policyUpdatesButton.addActionListener(e -> viewPolicyUpdates()); // Action for policy updates
-        backButton.addActionListener(e -> frame.dispose());
-        dashboardPanel.add(communityProgramsButton);
-        dashboardPanel.add(policyUpdatesButton);
-        dashboardPanel.add(backButton);
-
-        frame.add(inputPanel, BorderLayout.NORTH);
-        frame.add(graphPanel, BorderLayout.CENTER);
-        frame.add(dashboardPanel, BorderLayout.SOUTH); 
-       
-
-
-        frame.setVisible(true);
-    }
-
-    private static void displayAllRoutes() {
-        JFrame frame = new JFrame("All Routes");
-        frame.setSize(500, 500);
-        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        frame.add(new GraphPanel());
-        frame.setVisible(true);
-    }
-    
-    
 }
